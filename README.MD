@@ -1,12 +1,12 @@
-> This project is currently experimental, use at your own risk :)
+# Getting Started with the Dynamic Renderer
 
-#Getting Started with the Dynamic Renderer
+> This project is currently experimental, use at your own risk :)
 
 To simplify and standardize dynamic rendering within an Angular application, we've created the Dynamic Renderer, a component that takes as input, a JSON Component schema describing component's and their properties, and an identity map which maps textual identifiers to proper Angular component classes. This allows dynamic renderering to be used for as much or little of the UI with as many or as few components as desired without creating an unnecessarily abstracted vocabulary.
 
 The mission of the Dynamic Renderer is to create a super thin adapter between a natural configuration-only JSON schema, the powerful Angular dynamic rendering APIs, and any components of your choosing. This means you should be able to use the Dynamic Renderer with any 3rd party components dynamically by exposing them to the dynamic renderer's component map.
 
-##Importing the Dynamic Renderer
+## Importing the Dynamic Renderer
 
 To take advantage of the dynamic renderer you need to import it into the NgModule for the component you wish to be able to dynamically render within. If your using the Dynamic Renderer for the whole application, that would be the AppModule, otherwise it could be a Page component, or if your only using the Dynamic Renderer for a specific part of the UI, some arbitrary component's module.
 
@@ -42,7 +42,7 @@ export class MyPageModule { }
 
 > Note that you still need to include any modules for components you'd like exposed to the dynamic render. The dynamic renderer contains no components besides the renderer itself. You additionally need to add any components that will be available but aren't used in the module elsewhere in the **entryComponents** of the NgModule. Otherwise, the components will not be available at runtime because they will be removed during the tree-shaking process that happens at build time.
 
-##Using the Dynamic Renderer
+## Using the Dynamic Renderer
 
 Once the Dynamic Renderer is included in the module which houses the component from which you want to use it within, you can use it like any other component. 
 
@@ -91,7 +91,7 @@ export class MyPageComponent {
 
 So now we can see that our componentMap is just a identity map between textual aliases  and the component class the renderer should use when it encounters it in the component meta object. Likewise the componentMeta  property is just a collection (an array of objects) which describes the component and its properties. In the example were exposing two components under the alias of comp1 and comp2 and setting the label property for each. 
 
-##The Component Meta Schema
+## The Component Meta Schema
 
 In establishing the JSON meta schema, care was taken **not** to create an additional unnecessary layer of abstraction with its own arbitrary vocabulary; thus the meta schema is just a nested structure of components and properties which map directly to the components themselves.
 
