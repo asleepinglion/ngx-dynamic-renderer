@@ -102,11 +102,10 @@ In establishing the JSON meta schema, care was taken **not** to create an additi
     { 
       "component": "componentMapAlias",
       "properties": {
-        "property": "Property Value",
-         ...
+        "property": "Property Value"
       },
-      "events": [...],
-      "components:" [ ... ]
+      "events": [],
+      "components:" []
   ]
 }
 ```
@@ -116,9 +115,11 @@ The meta schema additionally allows you to subscribe to component events and exe
 ```json
 "events": {
   "eventName": [
-    "target": "self",
-    "action": "componentMethod",
-    "params": [ "param1" ]
+    {
+      "target": "self",
+      "action": "componentMethod",
+      "params": [ "param1" ]
+    }
   ]
 }
 ```
