@@ -95,6 +95,7 @@ So now we can see that our componentMap is just a identity map between textual a
 
 In establishing the JSON meta schema, care was taken **not** to create an additional unnecessary layer of abstraction with its own arbitrary vocabulary; thus the meta schema is just a nested structure of components and properties which map directly to the components themselves.
 
+```json
 { 
   "components": 
   [
@@ -108,9 +109,11 @@ In establishing the JSON meta schema, care was taken **not** to create an additi
       "components:" [ ... ]
   ]
 }
+```
 
 The meta schema additionally allows you to subscribe to component events and execute actions based on conditions. The available events are those the component emits, and the actions are those methods publicly available on the component (no special tricks). 
 
+```json
 "events": {
   "eventName": [
     "target": "self",
@@ -118,6 +121,7 @@ The meta schema additionally allows you to subscribe to component events and exe
     "params": [ "param1" ]
   ]
 }
+```
 
 ## Development
 
