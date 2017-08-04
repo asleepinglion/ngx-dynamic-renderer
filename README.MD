@@ -106,6 +106,7 @@ In establishing the JSON meta schema, care was taken **not** to create an additi
       },
       "events": [],
       "components:" []
+    }
   ]
 }
 ```
