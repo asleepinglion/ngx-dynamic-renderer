@@ -1,19 +1,22 @@
 import {
   Component,
   ComponentFactoryResolver,
-  ComponentRef,
+  ComponentRef, // needed by the ngc compiler
   ViewContainerRef,
   Renderer2,
   ViewChild,
   Input,
-  AfterContentInit
+  OnChanges,
+  SimpleChanges,
+  OnInit,
+  OnDestroy
 } from '@angular/core';
 
 @Component({
   selector: 'ngx-dynamic-renderer',
   template: `<div #container></div>`
 })
-export class NgxDynamicRendererComponent implements AfterContentInit {
+export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy {
 
   // access to the dynamic renderer container reference
   @ViewChild('container', { read: ViewContainerRef }) container: ViewContainerRef;
@@ -36,59 +39,44 @@ export class NgxDynamicRendererComponent implements AfterContentInit {
 
   constructor(private resolver: ComponentFactoryResolver, private renderer: Renderer2) { }
 
-  ngAfterContentInit() {
+  ngOnInit () {
     // make the dynamic renderer available to itself
     this.componentMap = Object.assign(DynamicRendererMap, this.componentMap);
+  }
 
-    // loop over configuration and generate components
-    this._render(this.components);
+  // tood: optimize by clearing only components removed / updating values of others?
+  ngOnChanges(changes: SimpleChanges) {
 
-    // when the reference count of the root renderer is zero, we know the rendering is complete.
-    this.rootRenderer.refCount -= 1;
-    if ( this.rootRenderer.refCount === 0 ) {
-      console.log('(dynamic-renderer) rendering complete.');
-      this._subscribeEvents();
+    if ( changes.components ) {
+      // ensure we are creating a copy of the array and not passing by reference
+      this.components = [...changes.components.currentValue];
+      // unsubsribe to any events
+      this._unSubscribeEvents();
+
+      // clear components
+      this.container.clear();
+      this.refCount = 1;
+
+      // loop over configuration and generate components
+      // nested renderers will increase the root renderer's refCount
+      this._render(this.components);
+
+      // when the reference count of the root renderer is zero, we know the rendering is complete.
+      this.rootRenderer.refCount -= 1;
+      if ( this.rootRenderer.refCount === 0 ) {
+        console.log('(dynamic-renderer) rendering complete.');
+        this._subscribeEvents();
+      }
     }
   }
 
-  // todo: support conditions
-  // todo: properly unsubscribe on destruction
-  _subscribeEvents() {
-    this.rootRenderer.eventRegistry.forEach(eventDef => {
-
-      const target = (!eventDef.target || eventDef.target === 'self') ? eventDef.source : this.rootRenderer.instanceMap[eventDef.target];
-
-      if ( target ) {
-        const action = target.instance[eventDef.action];
-        // const params = eventDef.params || [];
-
-        if ( action ) {
-          console.log('(dynamic-renderer) subscribing event:', eventDef);
-
-          // subscribe to @Output if available
-          if ( eventDef.source.instance[eventDef.eventName] ) {
-            eventDef.source.instance[eventDef.eventName].subscribe((event) => {
-              // todo: support interpolation of variables in params
-              console.log('(dynamic-renderer) firing event:', eventDef.eventName);
-              action.apply(target.instance, eventDef.params);
-            });
-
-          // else use native event, such as click, blur, etc
-          } else {
-            this.renderer.listen(eventDef.source.location.nativeElement, eventDef.eventName, (event) => {
-              // todo: support interpolation of variables in params
-              console.log('(dynamic-renderer) firing event:', eventDef.eventName);
-              action.apply(target.instance, eventDef.params);
-            });
-          }
-        }
-      }
-    });
+  ngOnDestroy() {
+    this._unSubscribeEvents();
   }
 
   _render(components) {
     if (components.length > 0 ) {
-      console.log('(dynamic-renderer) renderer starting with:', components[components.length - 1].id);
+      console.log('(dynamic-renderer) rendering:', components[components.length - 1].id || '(no id set)');
     }
 
     // render compoonents (reversed since components created at index 0)
@@ -100,8 +88,8 @@ export class NgxDynamicRendererComponent implements AfterContentInit {
     return instances;
   }
 
-  _createComponent(componentDef:any) {
-    console.log('(dynamic-renderer) creating component...', componentDef.id);
+  _createComponent(componentDef: any) {
+    console.log('(dynamic-renderer) creating:', componentDef.id);
     // console.log('createComponent', componentDef);
 
     // make sure the defined component exists in the component map
@@ -131,14 +119,15 @@ export class NgxDynamicRendererComponent implements AfterContentInit {
       );
 
       // pass through any properties for the component
+      // todo: support interoplation of properties
       if ( componentDef.properties ) {
         Object.keys(componentDef.properties)
           .forEach((property) => {
-            // console.log('setting prop:', property, componentDef.properties[property]);
-            component.instance[property] = componentDef.properties[property];
+            component.instance[property] = this._interpolate(componentDef.properties[property], component.instance);
+            console.log('(dynamic-renderer) setting:', property, component.instance[property]);
           });
 
-      // if this is a dynamic renderer itself, pass the components into the component's properties.
+      // if this is a nested dynamic renderer itself, pass the components into the component's properties.
       } else {
         if ( componentDef.component === 'dynamic-renderer' ) {
           component.instance['components'] = componentDef.components;
@@ -155,28 +144,127 @@ export class NgxDynamicRendererComponent implements AfterContentInit {
       // maintain registry of events to actions (subscription happens after rendering complete)
       if ( componentDef.events ) {
         Object.keys(componentDef.events).forEach(eventName => {
-          componentDef.events[eventName].forEach(eventDef => {
-            const event = {
+          const newEvents = componentDef.events[eventName].map(eventDef => {
+
+            console.log(eventDef.action);
+
+            return {
               source: component,
               eventName: eventName,
               target: eventDef.target,
               action: eventDef.action,
               params: eventDef.params
             };
-            console.log('(dynamic-renderer) registering event:', event);
-            this.rootRenderer.eventRegistry.push(event);
           });
+          this.rootRenderer.eventRegistry = [...this.rootRenderer.eventRegistry, ...newEvents];
         });
       }
 
       return component;
     } else {
-      console.log('(dynamic-renderer) component not registered with renderer:', componentDef.component);
+      console.log('(dynamic-renderer) component not found:', componentDef.component);
       return false;
     }
   }
 
+  // replace variables in string with those from context
+  _interpolate(expr: string, context: object): string {
+
+    const templateMatcher: RegExp = /{{\s?([^{}\s]*)\s?}}/g;
+
+    if ( typeof expr !== 'string' || !context ) {
+      return expr;
+    }
+
+    console.log('(dynamic-renderer) interpolating:', expr);
+
+    return expr.replace(templateMatcher, (match: string, contents: string) => {
+      return this._getValue(contents, context);
+    });
+  }
+
+  _getValue(expr: string, context: object ): string {
+    const keys = expr.split('.');
+
+    // support id-based references to other components
+    const firstKey = keys[0].split('#');
+    if ( firstKey.length > 1 ) {
+      if ( this.rootRenderer.instanceMap[firstKey[1]] ) {
+        context = this.rootRenderer.instanceMap[firstKey[1]].instance;
+        keys.shift();
+      }
+    }
+
+    // traverse dot syntax
+    let prop = context;
+    keys.forEach((key, ) => {
+      if ( prop ) {
+        prop = prop[key];
+      }
+    });
+
+    // casting to string
+    return prop + '';
+  }
+
+  // todo: support conditions
+  // todo: debouncing?
+  _subscribeEvents() {
+    this.rootRenderer.eventRegistry = this.rootRenderer.eventRegistry.map(eventDef => {
+
+      const target = (!eventDef.target || eventDef.target === 'self') ?
+        eventDef.source : this.rootRenderer.instanceMap[eventDef.target];
+
+      if ( target ) {
+        const action = target.instance[eventDef.action];
+        // const params = eventDef.params || [];
+
+        if ( action ) {
+          console.log('(dynamic-renderer) subscribing event:', eventDef.eventName, '->',
+            target, ',', eventDef.action);
+
+          // subscribe to @Output if available
+          // todo: ensure this is actual an Observerable
+          if ( eventDef.source.instance[eventDef.eventName] ) {
+            eventDef.subscription = eventDef.source.instance[eventDef.eventName].subscribe((event) => {
+              // todo: support interpolation of variables in params
+              console.log('(dynamic-renderer) firing event:', eventDef.eventName);
+              action.apply(target.instance, eventDef.params);
+            });
+
+          // else use native event, such as click, blur, etc
+          } else {
+            eventDef.listener = this.renderer.listen(eventDef.source.location.nativeElement, eventDef.eventName, (event) => {
+              // todo: support interpolation of variables in params
+              console.log('(dynamic-renderer) firing event:', eventDef.eventName);
+              action.apply(target.instance, eventDef.params);
+            });
+          }
+        }
+      }
+
+      return eventDef;
+    });
+  }
+
+  _unSubscribeEvents() {
+    this.rootRenderer.eventRegistry.forEach(eventDef => {
+      if ( eventDef.subscription ) {
+        console.log('(dynamic-renderer) unsubscribing event:', eventDef.eventName);
+        eventDef.subscription.unsubscribe();
+      }
+
+      if ( eventDef.listener ) {
+        console.log('(dynamic-renderer) unsubscribing event:', eventDef.eventName);
+        eventDef.listener();
+      }
+    });
+
+    // reset the event registry 
+    this.rootRenderer.eventRegistry = [];
+  }
+
 }
 
-// make the component renderer available to itself
+// make the dynamic renderer available to itself
 const DynamicRendererMap = { 'dynamic-renderer': NgxDynamicRendererComponent };
