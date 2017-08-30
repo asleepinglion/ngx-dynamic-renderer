@@ -8,14 +8,22 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import 'hammerjs';
 import { NgxDynamicRendererModule } from 'ngx-dynamic-renderer';
 
-import { MdSidenavModule, MdIconModule, MdButtonModule, MdToolbarModule } from '@angular/material';
+import { ServicesModule } from './services/services.module';
+
+import { 
+  MdSidenavModule, 
+  MdIconModule, 
+  MdButtonModule, 
+  MdToolbarModule 
+} from '@angular/material';
 
 import { 
   ComponentsModule, 
   DynButtonComponent, 
   DynIconComponent, 
   DynInputComponent, 
-  DynCounterInputComponent 
+  DynCounterInputComponent,
+  DynCounterComponent
 } from './components/components.module';
 
 @NgModule({
@@ -25,9 +33,10 @@ import {
   imports: [
     BrowserModule,
     BrowserAnimationsModule,
+    ServicesModule,
     ComponentsModule,
     NgxDynamicRendererModule,
-    FormsModule,
+    FormsModule,    
     MdSidenavModule,
     MdIconModule,
     MdButtonModule,
@@ -35,6 +44,12 @@ import {
   ],
   providers: [],
   bootstrap: [AppComponent],
-  entryComponents: [DynIconComponent, DynButtonComponent, DynInputComponent, DynCounterInputComponent]
+  entryComponents: [
+    DynIconComponent, 
+    DynButtonComponent, 
+    DynInputComponent, 
+    DynCounterInputComponent,
+    DynCounterComponent
+  ]
 })
 export class AppModule { }

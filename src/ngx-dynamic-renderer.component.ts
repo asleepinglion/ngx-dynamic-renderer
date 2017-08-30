@@ -18,52 +18,52 @@ import {
 })
 export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy {
 
-  // access to the dynamic renderer container reference
+  // acquire access to the dynamic renderer's container
   @ViewChild('container', { read: ViewContainerRef }) container: ViewContainerRef;
-
-  // array of components to render
+  // id to reference the renderer
+  private id = 'root';
+  // maintain reference to root renderer (supporting nested renderers)
+  private rootRenderer = this;
+  // array of objects describing the components to render
   @Input() components = [];
-
   // component map which maps text aliases to Angular component classes
   @Input() componentMap = {};
-
-  // instance map for the dynamic event system
+  // service map which maps text aliases to Angular services
+  @Input() serviceMap = {};
+  // instance map of component instances by id
   private instanceMap = {};
-
-  // provide reference to root renderer & maintain reference count for event registration
-  private rootRenderer = this;
-  private refCount = 1;
-
-  // events to register when done renderering
-  private eventRegistry = [];
+  // registry of events to subscribe/unsubscribe
+  private events = [];
+  // registery of interpolations based on subscriptions
+  private interpolations = {};
 
   constructor(private resolver: ComponentFactoryResolver, private renderer: Renderer2) { }
 
   ngOnInit () {
-    // make the dynamic renderer available to itself
+    // make the dynamic renderer available to itself for nested renderering
+    // tslint:disable-next-line
     this.componentMap = Object.assign(DynamicRendererMap, this.componentMap);
   }
 
-  // tood: optimize by clearing only components removed / updating values of others?
+  // todo: optimize by clearing only removed components & updating values of existing components
   ngOnChanges(changes: SimpleChanges) {
 
     if ( changes.components ) {
       // ensure we are creating a copy of the array and not passing by reference
       this.components = [...changes.components.currentValue];
-      // unsubsribe to any events
+
+      // unsubsribe to any events and interpolations
       this._unSubscribeEvents();
+      this._unSubscribeInterpolations();
 
       // clear components
       this.container.clear();
-      this.refCount = 1;
 
       // loop over configuration and generate components
       // nested renderers will increase the root renderer's refCount
       this._render(this.components);
 
-      // when the reference count of the root renderer is zero, we know the rendering is complete.
-      this.rootRenderer.refCount -= 1;
-      if ( this.rootRenderer.refCount === 0 ) {
+      if ( this.id === 'root' ) {
         console.log('(dynamic-renderer) rendering complete.');
         this._subscribeEvents();
       }
@@ -72,13 +72,14 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
 
   ngOnDestroy() {
     this._unSubscribeEvents();
+    this._unSubscribeInterpolations();
+  }
+
+  _uid(prefix = '') {
+    return `${prefix}-${Math.random().toString(36).substring(2, 10)}`;
   }
 
   _render(components) {
-    if (components.length > 0 ) {
-      console.log('(dynamic-renderer) rendering:', components[components.length - 1].id || '(no id set)');
-    }
-
     // render compoonents (reversed since components created at index 0)
     const instances = components.reverse().map(componentDef => {
       return this._createComponent(componentDef);
@@ -89,13 +90,14 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
   }
 
   _createComponent(componentDef: any) {
+    // generate an id if not set
+    componentDef.id = componentDef.id || this._uid(componentDef.component);
+
     console.log('(dynamic-renderer) creating:', componentDef.id);
     // console.log('createComponent', componentDef);
 
     // make sure the defined component exists in the component map
     if ( this.componentMap[componentDef.component] ) {
-
-      // console.log('creating component:', componentDef);
 
       // create component factory from class
       const compFactory = this.resolver.resolveComponentFactory(this.componentMap[componentDef.component]);
@@ -118,21 +120,23 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
         projections
       );
 
+      // ensure the id is set on the instance
+      component.instance['id'] = componentDef.id;
+
       // pass through any properties for the component
-      // todo: support interoplation of properties
       if ( componentDef.properties ) {
         Object.keys(componentDef.properties)
           .forEach((property) => {
-            component.instance[property] = this._interpolate(componentDef.properties[property], component.instance);
+            this._interpolate(componentDef.properties[property], component.instance, property);
             console.log('(dynamic-renderer) setting:', property, component.instance[property]);
           });
 
       // if this is a nested dynamic renderer itself, pass the components into the component's properties.
       } else {
         if ( componentDef.component === 'dynamic-renderer' ) {
-          component.instance['components'] = componentDef.components;
+          component.instance['id'] = this._uid();
           component.instance['rootRenderer'] = this.rootRenderer;
-          this.rootRenderer.refCount += 1;
+          component.instance['components'] = componentDef.components;
         }
       }
 
@@ -141,22 +145,20 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
         this.rootRenderer.instanceMap[componentDef.id] = component;
       }
 
-      // maintain registry of events to actions (subscription happens after rendering complete)
+      // maintain registry of events to actions (subscriptions wired after rendering complete)
       if ( componentDef.events ) {
         Object.keys(componentDef.events).forEach(eventName => {
           const newEvents = componentDef.events[eventName].map(eventDef => {
-
-            console.log(eventDef.action);
-
             return {
-              source: component,
+              origin: component,
+              source: eventDef.source,
               eventName: eventName,
               target: eventDef.target,
               action: eventDef.action,
-              params: eventDef.params
+              params: eventDef.params || []
             };
           });
-          this.rootRenderer.eventRegistry = [...this.rootRenderer.eventRegistry, ...newEvents];
+          this.rootRenderer.events = [...this.rootRenderer.events, ...newEvents];
         });
       }
 
@@ -167,30 +169,101 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
     }
   }
 
-  // replace variables in string with those from context
-  _interpolate(expr: string, context: object): string {
+  // lexer to tokenize expression into strings & variables
+  _lex(expr) {
+    const tokenTypes = [
+      { regex: /^{{(\s?([^{}\s]*)\s?)}}/, type: 'variable' },
+      { regex: /(^.+?)(?={{|$)/, type: 'string' }
+    ];
 
-    const templateMatcher: RegExp = /{{\s?([^{}\s]*)\s?}}/g;
+    let tokens = [];
+    let match;
+    let i;
 
-    if ( typeof expr !== 'string' || !context ) {
+    do {
+      for ( i = 0; i < tokenTypes.length; i++ ) {
+        match = tokenTypes[i].regex.exec(expr);
+        if ( match ) {
+          tokens.push({type: tokenTypes[i].type, value: match[1], id: this._uid('token')});
+          expr = expr.substring(match[0].length);
+        }
+      }
+    } while (expr.length > 0 );
+
+    return tokens;
+  }
+
+  // interpolate properties with dynamic values
+  _interpolate(expr, origin: object, property: string) {
+    if ( typeof expr !== 'string' || !origin ) {
       return expr;
     }
 
-    console.log('(dynamic-renderer) interpolating:', expr);
+    let tokens = this._lex(expr);
 
-    return expr.replace(templateMatcher, (match: string, contents: string) => {
-      return this._getValue(contents, context);
-    });
+    let uid = this._uid();
+    this.interpolations[uid] = {
+      component: origin['id'],
+      property: property,
+      tokens: tokens,
+      values: {},
+      subscriptions: {},
+      update: () => {
+        // maintain quick access for reflection
+        let interpolationDef = this.interpolations[uid];
+
+        // update property on origin
+        origin[property] = tokens.map((token, index) => {
+
+          // return simple value for strings & numbers
+          if ( token.type === 'string' || token.type === 'number' ) {
+            return token.value;
+          } else {
+            // look up dynamic value
+            let dynValue = this._getValue(token.value, origin);
+
+            // return value if reference to simple string or number
+            if ( typeof dynValue === 'string' || typeof dynValue === 'number' ) {
+              return dynValue;
+
+            // subscribe if value is an observable
+            } else if ( dynValue && typeof dynValue['subscribe'] === 'function' ) {
+
+              // todo: do subscribtions after rendering is complete to access props of components renderered later
+              if ( !interpolationDef.subscriptions[token.id] ) {
+                interpolationDef.subscriptions[token.id] = true;
+                console.log('(dynamic-renderer) subscribing interpolated value for:', origin['id'], property, token.id);
+                interpolationDef.subscriptions[token.id] = dynValue['subscribe']((value) => {
+                  console.log('(dynamic-renderer) updating interpolated value:', value);
+                  interpolationDef.values[index] = value;
+                  interpolationDef.update();
+                });
+              }
+
+              return (typeof interpolationDef.values[index] === 'undefined' ) ? '' : interpolationDef.values[index];
+            }
+          }
+        }).join('');
+      }
+    };
+
+    // trigger initial update
+    this.interpolations[uid].update();
   }
 
-  _getValue(expr: string, context: object ): string {
+  _getValue(expr: string, context: object ) {
     const keys = expr.split('.');
 
-    // support id-based references to other components
-    const firstKey = keys[0].split('#');
-    if ( firstKey.length > 1 ) {
-      if ( this.rootRenderer.instanceMap[firstKey[1]] ) {
-        context = this.rootRenderer.instanceMap[firstKey[1]].instance;
+    // support id-based references to other components or services
+    const firstChar = keys[0].substr(0, 1);
+    if ( firstChar === '#') {
+      if ( this.rootRenderer.instanceMap[keys[0].substr(1, keys[0].length - 1)] ) {
+        context = this.rootRenderer.instanceMap[keys[0].substr(1, keys[0].length - 1)].instance;
+        keys.shift();
+      }
+    } else if ( firstChar === '$' ) {
+      if ( this.rootRenderer.serviceMap[keys[0].substr(1, keys[0].length - 1)] ) {
+        context = this.rootRenderer.serviceMap[keys[0].substr(1, keys[0].length - 1)];
         keys.shift();
       }
     }
@@ -203,21 +276,39 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
       }
     });
 
-    // casting to string
-    return prop + '';
+    return prop;
   }
 
   // todo: support conditions
-  // todo: debouncing?
+  // todo: support debouncing?
   _subscribeEvents() {
-    this.rootRenderer.eventRegistry = this.rootRenderer.eventRegistry.map(eventDef => {
+    this.rootRenderer.events = this.rootRenderer.events.map(eventDef => {
 
-      const target = (!eventDef.target || eventDef.target === 'self') ?
-        eventDef.source : this.rootRenderer.instanceMap[eventDef.target];
+      let source = (!eventDef.source || eventDef.source === 'self') ? eventDef.origin : eventDef.source;
+      if (typeof source === 'string') {
+        if (source.substr(0, 1) === '$') {
+          source = this.rootRenderer.serviceMap[source.substr(1, source.length - 1)];
+        } else if (source.substr(0, 1) === '#') {
+          source = this.rootRenderer.instanceMap[source.substr(1, source.length - 1)].instance;
+        } else {
+          source = this.rootRenderer.instanceMap[source].instance;
+        }
+      }
 
-      if ( target ) {
-        const action = target.instance[eventDef.action];
-        // const params = eventDef.params || [];
+      let target = (!eventDef.target || eventDef.target === 'self') ? eventDef.origin : eventDef.target;
+      if (typeof target === 'string') {
+        if (target.substr(0, 1) === '$') {
+          target = this.rootRenderer.serviceMap[target.substr(1, target.length - 1)];
+        } else if (source.substr(0, 1) === '#') {
+          target = this.rootRenderer.instanceMap[target.substr(1, target.length - 1)];
+        } else {
+          target = this.rootRenderer.instanceMap[target];
+        }
+      }
+
+      if ( source && target ) {
+        target = (target.instance) ? target.instance : target;
+        const action = target[eventDef.action];
 
         if ( action ) {
           console.log('(dynamic-renderer) subscribing event:', eventDef.eventName, '->',
@@ -225,19 +316,23 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
 
           // subscribe to @Output if available
           // todo: ensure this is actual an Observerable
-          if ( eventDef.source.instance[eventDef.eventName] ) {
-            eventDef.subscription = eventDef.source.instance[eventDef.eventName].subscribe((event) => {
+          if ( source[eventDef.eventName] && typeof source[eventDef.eventName].subscribe === 'function' ) {
+            eventDef.subscription = source[eventDef.eventName].subscribe((value) => {
               // todo: support interpolation of variables in params
-              console.log('(dynamic-renderer) firing event:', eventDef.eventName);
-              action.apply(target.instance, eventDef.params);
+              console.log('(dynamic-renderer) firing event:', eventDef.eventName, value);
+
+              // todo: provide option to disable this feature?
+              // push new value on the end of the params list
+              // exceucte the action passing in the parameters
+              action.apply(target, [...eventDef.params, value]);
             });
 
           // else use native event, such as click, blur, etc
-          } else {
-            eventDef.listener = this.renderer.listen(eventDef.source.location.nativeElement, eventDef.eventName, (event) => {
+          } else if ( source.location ) {
+            eventDef.listener = this.renderer.listen(source.location.nativeElement, eventDef.eventName, (event) => {
               // todo: support interpolation of variables in params
-              console.log('(dynamic-renderer) firing event:', eventDef.eventName);
-              action.apply(target.instance, eventDef.params);
+              console.log('(dynamic-renderer) firing event:', eventDef.eventName, event);
+              action.apply(target, [...eventDef.params, event.target.value]);
             });
           }
         }
@@ -248,7 +343,7 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
   }
 
   _unSubscribeEvents() {
-    this.rootRenderer.eventRegistry.forEach(eventDef => {
+    this.rootRenderer.events.forEach(eventDef => {
       if ( eventDef.subscription ) {
         console.log('(dynamic-renderer) unsubscribing event:', eventDef.eventName);
         eventDef.subscription.unsubscribe();
@@ -260,8 +355,19 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
       }
     });
 
-    // reset the event registry 
-    this.rootRenderer.eventRegistry = [];
+    // reset the event registry
+    this.rootRenderer.events = [];
+  }
+
+  _unSubscribeInterpolations() {
+    Object.keys(this.rootRenderer.interpolations).forEach(interpolationDefId => {
+      let interpolationDef = this.rootRenderer.interpolations[interpolationDefId];
+      Object.keys(interpolationDef.subscriptions).forEach(subscriptionId => {
+        console.log('(dynamic-renderer) unsubscribing interpolation:',
+          interpolationDef.component, interpolationDef.property, subscriptionId);
+        interpolationDef.subscriptions[subscriptionId].unsubscribe();
+      });
+    });
   }
 
 }

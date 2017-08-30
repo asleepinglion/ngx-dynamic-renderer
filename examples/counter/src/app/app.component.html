@@ -11,5 +11,5 @@
   <md-sidenav #sideNav class="sidenav" mode="side" align="end">
       <textarea class="editor" [ngClass]="{'editor--error': !jsonIsValid }" (keyup)="onEditorChange($event)">{{componentsMetaJson}}</textarea>
   </md-sidenav>  
-  <ngx-dynamic-renderer class="renderer" [components]="componentsMeta" [componentMap]="componentMap"></ngx-dynamic-renderer>
+  <ngx-dynamic-renderer class="renderer" [components]="componentsMeta" [componentMap]="componentMap" [serviceMap]="serviceMap"></ngx-dynamic-renderer>
 </md-sidenav-container>

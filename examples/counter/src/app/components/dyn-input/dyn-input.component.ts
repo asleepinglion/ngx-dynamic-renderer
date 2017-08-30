@@ -7,8 +7,9 @@ import { Component, OnInit, Input } from '@angular/core';
 })
 export class DynInputComponent implements OnInit {
 
+  @Input() type: string;
   @Input() placeholder: string;
-  @Input() value: string;
+  @Input() value: string; 
 
   constructor() { }
 
