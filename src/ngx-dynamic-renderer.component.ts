@@ -128,7 +128,6 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
         Object.keys(componentDef.properties)
           .forEach((property) => {
             this._interpolate(componentDef.properties[property], component.instance, property);
-            console.log('(dynamic-renderer) setting:', property, component.instance[property]);
           });
 
       // if this is a nested dynamic renderer itself, pass the components into the component's properties.
@@ -141,7 +140,7 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
       }
 
       // support setting the innerHTML contents
-      if ( componentDef.properties.innerHTML ) {
+      if ( componentDef.properties && componentDef.properties.innerHTML ) {
         component.location.nativeElement.innerHTML = componentDef.properties.innerHTML;
       }
 
@@ -251,6 +250,8 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
             }
           }
         }).join('');
+
+        console.log('(dynamic-renderer) setting:', property, origin[property]);
       }
     };
 

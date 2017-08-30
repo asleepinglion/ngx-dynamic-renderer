@@ -21,12 +21,14 @@ export class DynEditorComponent implements OnInit {
   
   onEditorChange($event) {
 
-    let parsedMeta: Array<Object>;
+    let parsedMeta;
 
     try {
       parsedMeta = JSON.parse($event.target.value);
-      this.isValid = true;
-      this.editor.update(parsedMeta);
+      if ( Array.isArray(parsedMeta) ) {
+        this.isValid = true;
+        this.editor.update(parsedMeta);
+      }
     } catch (e) {
       this.isValid = false;
       return false;
