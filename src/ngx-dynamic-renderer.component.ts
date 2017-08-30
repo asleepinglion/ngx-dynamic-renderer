@@ -376,6 +376,9 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
         interpolationDef.subscriptions[subscriptionId].unsubscribe();
       });
     });
+
+    // reset the interpolation registry
+    this.rootRenderer.interpolations = [];
   }
 
 }
