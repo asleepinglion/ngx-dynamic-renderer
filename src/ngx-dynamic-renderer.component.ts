@@ -140,6 +140,11 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
         }
       }
 
+      // support setting the innerHTML contents
+      if ( componentDef.properties.innerHTML ) {
+        component.location.nativeElement.innerHTML = componentDef.properties.innerHTML;
+      }
+
       // maintain reference to component by id
       if ( componentDef.id ) {
         this.rootRenderer.instanceMap[componentDef.id] = component;
