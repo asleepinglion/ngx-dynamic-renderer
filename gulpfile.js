@@ -13,6 +13,7 @@ const srcFolder = path.join(rootFolder, 'src');
 const tmpFolder = path.join(rootFolder, '.tmp');
 const buildFolder = path.join(rootFolder, 'build');
 const distFolder = path.join(rootFolder, 'dist');
+const projectFolder = path.join(rootFolder, '/examples/node_modules/ngx-dynamic-renderer');
 
 /**
  * 1. Delete /dist folder
@@ -169,6 +170,11 @@ gulp.task('copy:readme', function () {
     .pipe(gulp.dest(distFolder));
 });
 
+gulp.task('copy:dist', function () {
+  return gulp.src([`${distFolder}/**/*`])
+    .pipe(gulp.dest(projectFolder));
+});
+
 /**
  * 10. Delete /.tmp folder
  */
@@ -194,6 +200,7 @@ gulp.task('compile', function () {
     'copy:build',
     'copy:manifest',
     'copy:readme',
+    'copy:dist',
     'clean:build',
     'clean:tmp',
     function (err) {

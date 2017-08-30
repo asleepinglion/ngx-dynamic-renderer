@@ -1,0 +1,18 @@
+:host {
+  -webkit-font-smoothing: subpixel-antialiased;
+  transform: translateZ(0) scale(1.0, 1.0);
+}
+
+.container {
+  height: 100vh;
+}
+
+.toolbar-left {
+  flex: 1 1 auto;
+}
+
+.sidenav {
+  width: 400px;
+  background-color: darkgray;
+  height: 100%;
+}
