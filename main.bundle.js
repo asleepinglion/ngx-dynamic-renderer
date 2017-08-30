@@ -69,7 +69,7 @@ AppRoutingModule = __decorate([
 /***/ "../../../../../src/app/app.component.html":
 /***/ (function(module, exports) {
 
-module.exports = "<md-sidenav-container class=\"container\">  \n  <md-toolbar class=\"mat-elevation-z4 toolbar\" color=\"primary\">\n    <span class=\"toolbar-left\">\n      {{title}}\n      <button md-button (click)=\"onToggleMenu()\"><md-icon>arrow_drop_down</md-icon></button>            \n    </span>\n    <span class=\"toolbar-right\">\n      <button md-button (click)=\"onToggleSettings()\"><md-icon>settings</md-icon></button>            \n    </span>  \n  </md-toolbar>\n  <md-sidenav #sideNav class=\"sidenav\" mode=\"side\" align=\"end\">\n      <dyn-editor #editor></dyn-editor>\n  </md-sidenav>  \n  <router-outlet></router-outlet>\n</md-sidenav-container>\n"
+module.exports = "<md-sidenav-container class=\"container\">  \n  <md-toolbar class=\"mat-elevation-z4 toolbar\" color=\"primary\">\n    <span class=\"toolbar-left\">\n      {{title}}\n      <button md-button><md-icon>arrow_drop_down</md-icon></button>            \n    </span>\n    <span class=\"toolbar-right\">\n      <button md-button (click)=\"onToggleSettings()\"><md-icon>settings</md-icon></button>            \n    </span>  \n  </md-toolbar>\n  <md-sidenav #sideNav class=\"sidenav\" mode=\"side\" align=\"end\">\n      <dyn-editor #editor></dyn-editor>\n  </md-sidenav>  \n  <router-outlet></router-outlet>\n</md-sidenav-container>\n"
 
 /***/ }),
 
@@ -591,8 +591,10 @@ var DynEditorComponent = (function () {
         var parsedMeta;
         try {
             parsedMeta = JSON.parse($event.target.value);
-            this.isValid = true;
-            this.editor.update(parsedMeta);
+            if (Array.isArray(parsedMeta)) {
+                this.isValid = true;
+                this.editor.update(parsedMeta);
+            }
         }
         catch (e) {
             this.isValid = false;
