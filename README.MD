@@ -55,7 +55,7 @@ Once the Dynamic Renderer is included in the module which houses the component f
 
 In the example below we invoke the renderer within our MyPage component's template (referred to as the root renderer):
 
-```js
+```html
 <ngx-dynamic-renderer [components]="componentMeta" [componentMap]="componentMap"></ngx-dynamic-renderer>
 ```
 
