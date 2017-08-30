@@ -16,7 +16,7 @@ export class DynCounterComponent implements OnInit {
     this.onChanged.next(this.value);
   }  
 
-  increment(step = '1') {
+  increment(step = '1') {    
     this.value = (this.value + parseInt(step));
     this.onChanged.next(this.value);
   }

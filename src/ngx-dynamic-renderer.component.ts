@@ -146,19 +146,21 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
       }
 
       // maintain registry of events to actions (subscriptions wired after rendering complete)
-      if ( componentDef.events ) {
+      if ( componentDef.events && !Array.isArray(componentDef.events) ) {
         Object.keys(componentDef.events).forEach(eventName => {
-          const newEvents = componentDef.events[eventName].map(eventDef => {
-            return {
-              origin: component,
-              source: eventDef.source,
-              eventName: eventName,
-              target: eventDef.target,
-              action: eventDef.action,
-              params: eventDef.params || []
-            };
-          });
-          this.rootRenderer.events = [...this.rootRenderer.events, ...newEvents];
+          if ( Array.isArray(componentDef.events[eventName]) ) {
+            const newEvents = componentDef.events[eventName].map(eventDef => {
+              return {
+                origin: component,
+                source: eventDef.source,
+                eventName: eventName,
+                target: eventDef.target,
+                action: eventDef.action,
+                params: eventDef.params || []
+              };
+            });
+            this.rootRenderer.events = [...this.rootRenderer.events, ...newEvents];
+          }
         });
       }
 
@@ -289,9 +291,9 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
         if (source.substr(0, 1) === '$') {
           source = this.rootRenderer.serviceMap[source.substr(1, source.length - 1)];
         } else if (source.substr(0, 1) === '#') {
-          source = this.rootRenderer.instanceMap[source.substr(1, source.length - 1)].instance;
+          source = this.rootRenderer.instanceMap[source.substr(1, source.length - 1)];
         } else {
-          source = this.rootRenderer.instanceMap[source].instance;
+          source = this.rootRenderer.instanceMap[source];
         }
       }
 
@@ -299,7 +301,7 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
       if (typeof target === 'string') {
         if (target.substr(0, 1) === '$') {
           target = this.rootRenderer.serviceMap[target.substr(1, target.length - 1)];
-        } else if (source.substr(0, 1) === '#') {
+        } else if (target.substr(0, 1) === '#') {
           target = this.rootRenderer.instanceMap[target.substr(1, target.length - 1)];
         } else {
           target = this.rootRenderer.instanceMap[target];
@@ -307,24 +309,24 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
       }
 
       if ( source && target ) {
-        target = (target.instance) ? target.instance : target;
-        const action = target[eventDef.action];
+        let sourceInstance = (source.instance) ? source.instance : source;
+        let targetInstance = (target.instance) ? target.instance : target;
+        const action = targetInstance[eventDef.action];
 
         if ( action ) {
-          console.log('(dynamic-renderer) subscribing event:', eventDef.eventName, '->',
-            target, ',', eventDef.action);
+          console.log('(dynamic-renderer) subscribing event:', eventDef.eventName, '->', targetInstance, eventDef.action);
 
           // subscribe to @Output if available
           // todo: ensure this is actual an Observerable
-          if ( source[eventDef.eventName] && typeof source[eventDef.eventName].subscribe === 'function' ) {
-            eventDef.subscription = source[eventDef.eventName].subscribe((value) => {
+          if ( sourceInstance[eventDef.eventName] && typeof sourceInstance[eventDef.eventName].subscribe === 'function' ) {
+            eventDef.subscription = sourceInstance[eventDef.eventName].subscribe((value) => {
               // todo: support interpolation of variables in params
               console.log('(dynamic-renderer) firing event:', eventDef.eventName, value);
 
               // todo: provide option to disable this feature?
               // push new value on the end of the params list
               // exceucte the action passing in the parameters
-              action.apply(target, [...eventDef.params, value]);
+              action.apply(targetInstance, [...eventDef.params, value]);
             });
 
           // else use native event, such as click, blur, etc
@@ -332,7 +334,7 @@ export class NgxDynamicRendererComponent implements OnInit, OnChanges, OnDestroy
             eventDef.listener = this.renderer.listen(source.location.nativeElement, eventDef.eventName, (event) => {
               // todo: support interpolation of variables in params
               console.log('(dynamic-renderer) firing event:', eventDef.eventName, event);
-              action.apply(target, [...eventDef.params, event.target.value]);
+              action.apply(targetInstance, [...eventDef.params, event.target.value]);
             });
           }
         }

@@ -11,14 +11,15 @@ export class CounterService {
     this.value = 0;        
   }  
 
-  increment(step = '1') {
-    console.log('incrementing:', this);
+  increment(step = '1') {    
     this.value = (this.value + parseInt(step));
-    this.count.next(this.value);
+    console.log(`(counter-service) incrementing to: ${this.value}`);   
+    this.count.next(this.value);    
   }
 
   decrement(step = '1' ) {
     this.value = (this.value - parseInt(step));
+    console.log(`(counter-service) decrementing to: ${this.value}`);
     this.count.next(this.value);
   }
 

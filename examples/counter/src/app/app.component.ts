@@ -86,7 +86,7 @@ export class AppComponent implements OnInit {
     `);
     */
 
-    /* 
+    /*
     // version with counter component 
     this.componentsMeta = JSON.parse(`
     [
@@ -156,7 +156,7 @@ export class AppComponent implements OnInit {
       }
     ]
     `);
-    */
+     */
 
     /*
     // version with service & events
@@ -223,6 +223,7 @@ export class AppComponent implements OnInit {
     `);
     */
 
+    
     // version with service & subscribed dynamic interpolation
     this.componentsMeta = JSON.parse(`
     [
@@ -271,7 +272,7 @@ export class AppComponent implements OnInit {
       }
     ]
     `);
-
+    /**/
   }
 
   get componentsMetaJson(): string {

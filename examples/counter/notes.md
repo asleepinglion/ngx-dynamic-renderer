@@ -1,9 +1,13 @@
+# Project Notes
+
 ## Initialize Project
 
 - ng new counter --styles=scss --routing
 - yarn add @angular/material @angular/ckd @angular/animations hammerjs
 - yarn add ngx-dynamic-renderer
 - ng serve --sourcemap=false
+
+> Use --sourcemap=false on ng serve for major increase in build times during development.
 
 - Add imports for @angular/animations and hammerjs.
 - Create components module and create desired components.
